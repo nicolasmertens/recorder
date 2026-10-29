@@ -1,5 +1,9 @@
 # Recorder
 
+Fork notes: [capture safeguards](docs/CAPTURE-INTEGRITY.md) and
+[local Whisper recovery findings](docs/LOCAL-TRANSCRIPTION.md). Local Whisper
+is a documented external workflow, not yet an in-app transcription option.
+
 A small, native macOS **menu-bar app** that records your meetings and voice notes with one
 click. It captures **two audio sources at once** and mixes them into a single stereo file —
 so you can always tell who was on the call from who was in the room:

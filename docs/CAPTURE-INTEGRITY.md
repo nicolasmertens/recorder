@@ -30,3 +30,10 @@ devices or demonstrate that a long call is captured correctly.
 5. Review app lifecycle while mixing and how capture errors remain visible.
 
 No audio, transcripts, private logs or recovery artifacts belong in this repository.
+
+## Transcription recovery
+
+See [Local transcription](LOCAL-TRANSCRIPTION.md) for the observed improvement
+from transcribing original audio directly with local Whisper, the limitations
+of timing reconstruction, and a proposed optional backend. This backend is not
+yet implemented in the app.
