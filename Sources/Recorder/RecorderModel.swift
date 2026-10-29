@@ -272,6 +272,7 @@ final class RecorderModel {
 
         let desktopResult = tap.stop()
         let micResult = mic.stop()
+        let integrity = CaptureIntegrityReport(desktop: desktopResult, microphone: micResult)
 
         cancelTimersAndAlerts()
         state = .idle
@@ -287,6 +288,7 @@ final class RecorderModel {
         let attendees = activeMeeting?.attendees ?? []
         Task.detached(priority: .utility) {
             do {
+                try integrity.write(to: folderURL)
                 try StereoMixer.mix(
                     desktopURL: desktopURL,
                     micURL: micURL,
@@ -303,7 +305,11 @@ final class RecorderModel {
                         attendees: attendees,
                         startedAt: startedAt
                     )
-                    if self.autoTranscribe {
+                    if let warning = integrity.warning {
+                        self.statusMessage = warning
+                        self.lastTranscription = pending
+                        self.transcriptionState = .idle
+                    } else if self.autoTranscribe {
                         self.statusMessage = "Saved \(outputURL.lastPathComponent)"
                         // Chain transcription off the successful mix.
                         self.startTranscription(pending)

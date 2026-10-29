@@ -18,11 +18,9 @@ import os
 /// overran the ~10 ms realtime deadline, tearing the desktop stream at every IO-buffer boundary
 /// (audible as broadband clicks / "distortion"). All disk work lives on the writer thread.
 ///
-/// macOS 26 has a confirmed regression where `AudioHardwareCreateProcessTap` + aggregate silently
-/// delivers all-zero PCM after extended uptime / sample-rate / Bluetooth changes while the IOProc
-/// keeps firing. We run a WATCHDOG: if RMS ≈ 0 for ~3s while the default output device is active,
-/// we tear down BOTH the tap and the aggregate and rebuild them, continuing to append to the SAME
-/// `AVAudioFile`.
+/// The watchdog recovers missing callbacks, not silence. A running output device
+/// may legitimately deliver silence while the remote participant is listening.
+/// Sample-rate changes and timeline gaps still need segment-aware capture.
 final class SystemAudioTap {
 
     // MARK: - Public callbacks (called on audio / arbitrary threads)
@@ -127,8 +125,6 @@ final class SystemAudioTap {
 
     private var watchdogTimer: DispatchSourceTimer?
     private let watchdogQueue = DispatchQueue(label: "systemaudiotap.watchdog")
-    /// If output is audibly running but the tap delivers ~silence for this long, rebuild.
-    private let watchdogSilenceThreshold: TimeInterval = 3.0
     private var rebuilding = false
 
     // Throttle the meter callback to ~15 Hz.
@@ -593,11 +589,13 @@ final class SystemAudioTap {
         guard let outDevice, Self.deviceIsRunningSomewhere(outDevice) else { return }
 
         let now = mach_absolute_time()
+        let lastCallback = lastCallbackHostTime.withLock { $0 }
+        let callbackAge = Double(Self.hostTimeToNanos(now &- lastCallback)) / 1_000_000_000.0
         let lastLoud = lastLoudHostTime.withLock { $0 }
-        let elapsedNanos = Self.hostTimeToNanos(now &- lastLoud)
-        let elapsedSeconds = Double(elapsedNanos) / 1_000_000_000.0
+        let audioAge = Double(Self.hostTimeToNanos(now &- lastLoud)) / 1_000_000_000.0
 
-        if elapsedSeconds >= watchdogSilenceThreshold {
+        if CaptureIntegrity.shouldRestart(secondsSinceAudio: audioAge, secondsSinceCallback: callbackAge) {
+            Self.log.error("System capture callbacks absent for \(callbackAge) seconds; rebuilding tap. Audio may contain a gap.")
             rebuildTapAndAggregate()
         }
     }
