@@ -22,6 +22,7 @@ struct RecorderPanel: View {
     @Environment(RecorderModel.self) private var model
 
     private let panelWidth: CGFloat = 340
+    @State private var contentHeight: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -55,6 +56,10 @@ struct RecorderPanel: View {
         }
         .padding(12)
         .frame(width: panelWidth)
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        .background(PanelWindowFitter(contentHeight: contentHeight))
+        .frame(maxHeight: .infinity, alignment: .top)
         // Suppress the auto-drawn focus ring on the first control when the
         // menu-bar window opens. (All text entry lives in the Preferences window.)
         .focusEffectDisabled()

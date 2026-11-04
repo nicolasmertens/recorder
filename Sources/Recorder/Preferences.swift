@@ -15,6 +15,7 @@ enum Preferences {
         static let silenceAutoStop    = "silenceAutoStopEnabled"
         static let autoTranscribe     = "autoTranscribeAfterSave"
         static let promptTemplate     = "geminiPromptTemplate"
+        static let excludedCalendars  = "excludedCalendarTitles"
     }
 
     /// Your name — used only as transcription context to label the local voice
@@ -55,5 +56,12 @@ enum Preferences {
     static var promptTemplate: String {
         get { defaults.string(forKey: Key.promptTemplate) ?? "" }
         set { defaults.set(newValue, forKey: Key.promptTemplate) }
+    }
+
+    /// Calendar titles (case-insensitive) left out of the Meetings list. Default:
+    /// "Agent runs", the fleet calendar that mirrors scheduled agent sessions and jobs.
+    static var excludedCalendarTitles: [String] {
+        get { defaults.stringArray(forKey: Key.excludedCalendars) ?? ["Agent runs"] }
+        set { defaults.set(newValue, forKey: Key.excludedCalendars) }
     }
 }

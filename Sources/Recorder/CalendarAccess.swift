@@ -78,17 +78,15 @@ final class CalendarAccess {
 
     // MARK: - Fetching
 
-    /// Timed meetings overlapping a (now-2h .. now+8h) window, across all calendars.
+    /// Timed meetings overlapping a (now-2h .. now+8h) window, across all non-excluded calendars.
     /// Drops all-day and empty-title events, sorts by start, dedups by
     /// `eventIdentifier`, and returns roughly the last 2 + current + next 2.
     func meetingsAroundNow(_ now: Date) -> [Meeting] {
         let start = now.addingTimeInterval(windowBack)
         let end = now.addingTimeInterval(windowForward)
 
-        // nil = all calendars. The predicate matches any event OVERLAPPING the window.
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
         // events(matching:) is synchronous and returns events in no guaranteed order.
-        let events = store.events(matching: predicate)
+        let events = eventsInWindow(start: start, end: end)
 
         var seen = Set<String>()
         let meetings: [Meeting] = events
@@ -155,13 +153,24 @@ final class CalendarAccess {
         return nil
     }
 
+    /// Events overlapping the window from every calendar except the excluded ones
+    /// (by default the fleet's "Agent runs" calendar: scheduled jobs, not meetings).
+    private func eventsInWindow(start: Date, end: Date) -> [EKEvent] {
+        let excluded = Set(Preferences.excludedCalendarTitles.map { $0.lowercased() })
+        let calendars = store.calendars(for: .event)
+            .filter { !excluded.contains($0.title.lowercased()) }
+        guard !calendars.isEmpty else { return [] }
+        // The predicate matches any event OVERLAPPING the window.
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
+        return store.events(matching: predicate)
+    }
+
     /// Full window of qualifying meetings, sorted by start, deduped — without the
     /// last2/current/next2 trim. Used by `currentMeeting`.
     private func sortedMeetings(now: Date) -> [Meeting] {
         let start = now.addingTimeInterval(windowBack)
         let end = now.addingTimeInterval(windowForward)
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
-        let events = store.events(matching: predicate)
+        let events = eventsInWindow(start: start, end: end)
 
         var seen = Set<String>()
         return events
