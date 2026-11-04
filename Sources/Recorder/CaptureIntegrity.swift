@@ -17,6 +17,48 @@ enum CaptureIntegrity {
     }
 }
 
+/// Live health of a recording in progress, fed from the level meters and written-frame counts.
+/// Catches the failures that cost us the Oct 29 and Nov 4 meetings while they can still be fixed:
+/// the computer track falling behind the mic, and no computer audio while Nick is talking.
+struct LiveCaptureCheck {
+    static let silenceDB: Float = -60
+    static let speechDB: Float = -40
+    static let silentFor: TimeInterval = 120
+    static let maxDrift: Double = 5
+    static let warmup: Double = 15
+
+    private(set) var desktopSilentSince: Date?
+    private(set) var lastMicSpeech: Date?
+
+    init(start: Date) { desktopSilentSince = start }
+
+    mutating func noteDesktop(db: Float, at now: Date) {
+        if db < Self.silenceDB {
+            if desktopSilentSince == nil { desktopSilentSince = now }
+        } else {
+            desktopSilentSince = nil
+        }
+    }
+
+    mutating func noteMic(db: Float, at now: Date) {
+        if db > Self.speechDB { lastMicSpeech = now }
+    }
+
+    /// `desktopSeconds`/`micSeconds`: audio written to disk so far per track.
+    func warning(at now: Date, desktopSeconds: Double, micSeconds: Double) -> String? {
+        if micSeconds > Self.warmup, desktopSeconds.isFinite, micSeconds - desktopSeconds > Self.maxDrift {
+            return String(format: "Computer audio is %.0fs behind your mic: the other side is not being fully recorded.",
+                          micSeconds - desktopSeconds)
+        }
+        if let since = desktopSilentSince, now.timeIntervalSince(since) >= Self.silentFor,
+           let talk = lastMicSpeech, talk > since {
+            let minutes = Int(now.timeIntervalSince(since) / 60)
+            return "No computer audio for \(minutes) min while you talk. If this is a call, the other side is not being recorded."
+        }
+        return nil
+    }
+}
+
 struct CaptureIntegrityReport: Codable {
     var desktopSeconds: Double
     var microphoneSeconds: Double

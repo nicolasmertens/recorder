@@ -95,6 +95,13 @@ final class SystemAudioTap {
     /// Frames actually written to disk. Updated ONLY by the writer thread during
     /// a session; read by `stop()` after the writer has been joined.
     private var capturedFrames: AVAudioFramePosition = 0
+    /// Frames on disk, readable from the main thread while recording.
+    private let writtenFrames = OSAllocatedUnfairLock<Int64>(initialState: 0)
+    /// Seconds of system audio written so far (live health check).
+    var writtenSeconds: Double {
+        let rate = capturedSampleRate
+        return rate > 0 ? Double(writtenFrames.withLock { $0 }) / rate : 0
+    }
 
     // MARK: - Off-realtime disk writer (ring buffer + consumer thread)
 
@@ -158,6 +165,7 @@ final class SystemAudioTap {
         tapUUID = UUID()
         firstHostTime = nil
         capturedFrames = 0
+        writtenFrames.withLock { $0 = 0 }
 
         // 1) Build tap + aggregate and read the tap format.
         let built = try buildTapAndAggregateLocked()
@@ -560,6 +568,7 @@ final class SystemAudioTap {
                     do {
                         try file.write(from: buffer)
                         self?.capturedFrames += AVAudioFramePosition(n)
+                        self?.writtenFrames.withLock { $0 += Int64(n) }
                     } catch {
                         self?.onFatalError?(error)
                     }

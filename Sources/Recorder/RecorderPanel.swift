@@ -79,6 +79,14 @@ struct RecorderPanel: View {
                 Text(stateLabel)
                     .font(.headline)
 
+                if let warning = model.captureWarning {
+                    Label(warning, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 if let status = model.statusMessage, !status.isEmpty {
                     Text(status)
                         .font(.caption)

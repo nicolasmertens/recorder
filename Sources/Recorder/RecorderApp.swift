@@ -22,6 +22,9 @@ struct RecorderApp: App {
     /// Menu-bar glyph: a microphone at rest, the record dot while recording,
     /// the pause glyph while paused.
     private var menuBarSymbol: String {
+        if model.state == .recording, model.captureWarning != nil {
+            return "exclamationmark.triangle.fill"
+        }
         switch model.state {
         case .idle:      return "mic.fill"
         case .recording: return "record.circle.fill"

@@ -17,6 +17,8 @@ final class RecorderModel {
     var currentSession: RecordingSession? = nil
     var elapsed: TimeInterval = 0
     var statusMessage: String? = nil
+    /// Live capture problem while recording (shown in the panel and as the menu-bar glyph).
+    var captureWarning: String? = nil
 
     // MARK: - Persisted preferences (mirrored to UserDefaults via Preferences)
 
@@ -68,6 +70,7 @@ final class RecorderModel {
     @ObservationIgnored private let calendar = CalendarAccess()
     @ObservationIgnored private let notifications = NotificationManager()
     @ObservationIgnored private let transcriber = GeminiTranscriber()
+    @ObservationIgnored private var liveCheck = LiveCaptureCheck(start: Date())
     @ObservationIgnored private var silenceMonitor: SilenceMonitor?
 
     @ObservationIgnored private var elapsedTimer: Timer?
@@ -211,6 +214,7 @@ final class RecorderModel {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.desktopLevel = meterLevel(fromDB: db)
+                self.liveCheck.noteDesktop(db: db, at: Date())
                 self.silenceMonitor?.noteLevel(db)
             }
         }
@@ -218,6 +222,7 @@ final class RecorderModel {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.micLevel = meterLevel(fromDB: db)
+                self.liveCheck.noteMic(db: db, at: Date())
                 self.silenceMonitor?.noteLevel(db)
             }
         }
@@ -383,12 +388,15 @@ final class RecorderModel {
     private func startElapsedTimer(from start: Date) {
         recordingStartedAt = start
         elapsed = 0
+        liveCheck = LiveCaptureCheck(start: start)
+        captureWarning = nil
         elapsedTimer?.invalidate()
         let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
                 guard let self, let started = self.recordingStartedAt else { return }
                 if self.state == .recording {
                     self.elapsed = Date().timeIntervalSince(started)
+                    self.checkCaptureHealth()
                 }
             }
         }
@@ -396,10 +404,24 @@ final class RecorderModel {
         elapsedTimer = timer
     }
 
+    /// Once a second while recording: warn as soon as the other side is not being captured,
+    /// while there is still time to fix it (the Oct 29 and Nov 4 meetings failed silently).
+    private func checkCaptureHealth() {
+        let warning = liveCheck.warning(at: Date(), desktopSeconds: tap.writtenSeconds,
+                                        micSeconds: mic.writtenSeconds)
+        guard warning != captureWarning else { return }
+        let isNew = captureWarning == nil && warning != nil
+        captureWarning = warning
+        if let warning, isNew {
+            notifications.postCaptureWarning(warning)
+        }
+    }
+
     private func cancelTimersAndAlerts() {
         elapsedTimer?.invalidate()
         elapsedTimer = nil
         recordingStartedAt = nil
+        captureWarning = nil
         silenceMonitor?.stop()
         notifications.cancelMeetingEndAlert()
     }

@@ -118,6 +118,17 @@ final class NotificationManager {
         center.add(request)
     }
 
+    /// Immediate alert: the recording in progress is not capturing the other side properly.
+    func postCaptureWarning(_ message: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Recorder: other side not recorded"
+        content.body = message
+        content.interruptionLevel = .timeSensitive
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: "capture-warning", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
     /// Remove the pending meeting-end alert (if any).
     func cancelMeetingEndAlert() {
         UNUserNotificationCenter.current()

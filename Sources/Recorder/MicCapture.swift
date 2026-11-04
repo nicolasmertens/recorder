@@ -70,6 +70,11 @@ final class MicCapture {
     /// Total frames written to disk.
     private var frameCount: AVAudioFramePosition = 0
 
+    /// Seconds of mic audio written so far (live health check).
+    var writtenSeconds: Double {
+        lock.withLock { sampleRate > 0 ? Double(frameCount) / sampleRate : 0 }
+    }
+
     /// Whether a tap is currently installed / engine running.
     private var running = false
 
