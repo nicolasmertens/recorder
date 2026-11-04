@@ -198,6 +198,7 @@ final class SystemAudioTap {
 
         self.writeFormat = writeFmt
         self.tapFormat = built.tapFormat
+        Self.log.notice("tap format: \(built.tapFormat.sampleRate, privacy: .public) Hz, \(built.tapFormat.channelCount, privacy: .public) ch, interleaved=\(built.tapFormat.isInterleaved, privacy: .public)")
         self.capturedSampleRate = built.tapFormat.sampleRate
 
         // 3) Spin up the off-realtime writer (ring + drain thread) BEFORE the
@@ -490,6 +491,21 @@ final class SystemAudioTap {
         if channelCount <= 1 {
             // Already mono: enqueue straight from the input buffer.
             ring.write(channelData[0], count: Int(frameCount))
+        } else if tapFormat.isInterleaved, let scratch = self.scratch {
+            // Interleaved (L R L R ...): one buffer, channel k at offset k with stride
+            // channelCount. Treating it as planar wrote half the frames with channels
+            // alternating, i.e. desktop audio at half speed with half of it lost (Nov 4 2026).
+            let base = channelData[0]
+            let total = Int(frameCount)
+            var offset = 0
+            while offset < total {
+                let chunk = min(total - offset, scratchCapacity)
+                let cn = vDSP_Length(chunk)
+                Self.downmixInterleaved(base + offset * channelCount, frames: chunk,
+                                        channels: channelCount, into: scratch)
+                ring.write(scratch, count: chunk)
+                offset += chunk
+            }
         } else if let scratch = self.scratch {
             // Average all channels into mono, in scratch-sized chunks (IO buffers are tiny, so
             // this loop runs once in practice).
@@ -507,6 +523,19 @@ final class SystemAudioTap {
                 ring.write(scratch, count: chunk)
                 offset += chunk
             }
+        }
+    }
+
+    /// Average `channels` interleaved channels (L R L R ...) of `frames` frames into mono `dst`.
+    /// Realtime-safe: no allocation.
+    static func downmixInterleaved(_ src: UnsafePointer<Float>, frames: Int, channels: Int,
+                                   into dst: UnsafeMutablePointer<Float>) {
+        let n = vDSP_Length(frames)
+        let stride = vDSP_Stride(channels)
+        var scale = 1.0 / Float(channels)
+        vDSP_vsmul(src, stride, &scale, dst, 1, n)
+        for ch in 1..<max(channels, 1) {
+            vDSP_vsma(src + ch, stride, &scale, dst, 1, dst, 1, n)
         }
     }
 
