@@ -64,6 +64,16 @@ struct Meeting: Identifiable, Equatable {
         start <= now && now <= end
     }
 
+    /// The in-progress meeting that started most recently (ties: the shorter one).
+    /// A long block like a 4-hour cleaner slot must not win over the call that
+    /// just started inside it.
+    static func mostRecentInProgress(_ meetings: [Meeting], now: Date) -> Meeting? {
+        meetings.filter { $0.isInProgress(now) }.max { a, b in
+            a.start != b.start ? a.start < b.start
+                : a.end.timeIntervalSince(a.start) > b.end.timeIntervalSince(b.start)
+        }
+    }
+
     /// Filesystem-safe suffix derived from the title.
     var folderSuffix: String {
         Meeting.sanitize(title)

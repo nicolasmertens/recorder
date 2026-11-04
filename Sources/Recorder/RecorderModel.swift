@@ -371,8 +371,7 @@ final class RecorderModel {
     /// default target for the main Record button so recording while you're in a
     /// meeting auto-tags it (folder name + end alert + transcription context).
     var currentMeeting: Meeting? {
-        let now = Date()
-        return meetings.first(where: { $0.isInProgress(now) })
+        Meeting.mostRecentInProgress(meetings, now: Date())
     }
 
     func quit() {

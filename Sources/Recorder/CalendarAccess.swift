@@ -115,7 +115,7 @@ final class CalendarAccess {
     func currentMeeting(_ now: Date) -> Meeting? {
         // Fetch the full (untrimmed) sorted set so the choice isn't skewed by trimming.
         let all = sortedMeetings(now: now)
-        return all.last(where: { $0.isInProgress(now) })   // in progress
+        return Meeting.mostRecentInProgress(all, now: now)  // in progress
             ?? all.last(where: { $0.start <= now })         // most recently started
             ?? all.first                                    // else next upcoming
     }
